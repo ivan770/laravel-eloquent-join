@@ -332,6 +332,8 @@ class EloquentJoinBuilder extends Builder
             } elseif ('onlyTrashed' == $method) {
                 call_user_func_array([$join, 'where'], [$relatedTableAlias.'.deleted_at', '<>', null]);
             }
+        } elseif ((in_array($method, ['orderByRaw']))) {
+            call_user_func_array([$join, $method], $params);
         } else {
             throw new InvalidRelationClause();
         }
@@ -385,7 +387,7 @@ class EloquentJoinBuilder extends Builder
         $parts = explode('.', $column);
 
         $parts = array_map(function ($value) {
-            return '"'.$value.'"';
+            return '`'.$value.'`';
         }, $parts);
 
         return implode('.', $parts);
