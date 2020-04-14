@@ -387,7 +387,7 @@ class EloquentJoinBuilder extends Builder
         $parts = explode('.', $column);
 
         $parts = array_map(function ($value) {
-            return '`'.$value.'`';
+            return '"'.$value.'"';
         }, $parts);
 
         return implode('.', $parts);
