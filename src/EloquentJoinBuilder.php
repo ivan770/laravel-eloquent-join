@@ -25,9 +25,13 @@ class EloquentJoinBuilder extends Builder
     const AGGREGATE_MAX = 'MAX';
     const AGGREGATE_MIN = 'MIN';
     const AGGREGATE_COUNT = 'COUNT';
+    const RAW_SQL_RELATION_PREFIX = 'relation';
 
     //use table alias for join (real table name or random sha1)
     protected $useTableAlias = false;
+
+    //use full relation path for table alias to support join of one table several times
+    protected $useFullPathTableAlias = false;
 
     //appendRelationsCount
     protected $appendRelationsCount = false;
@@ -116,6 +120,22 @@ class EloquentJoinBuilder extends Builder
         return $this->orWhereNotIn($column, $values);
     }
 
+    public function whereRawJoin($sql, $bindings = [], $boolean = 'and')
+    {
+        $query = $this->baseBuilder ? $this->baseBuilder : $this;
+        $sql = $query->performColumnsBinding($sql);
+
+        return $this->whereRaw($sql, $bindings, $boolean);
+    }
+
+    public function orWhereRawJoin($sql, $bindings = [], $boolean = 'and')
+    {
+        $query = $this->baseBuilder ? $this->baseBuilder : $this;
+        $sql = $query->performColumnsBinding($sql);
+
+        return $this->orWhereRaw($sql, $bindings, $boolean);
+    }
+
     public function orderByJoin($column, $direction = 'asc', $aggregateMethod = null)
     {
         $direction = strtolower($direction);
@@ -196,10 +216,12 @@ class EloquentJoinBuilder extends Builder
             $relatedModel = $relatedRelation->getRelated();
             $relatedPrimaryKey = $relatedModel->getKeyName();
             $relatedTable = $relatedModel->getTable();
-            $relatedTableAlias = $this->useTableAlias ? sha1($relatedTable.rand()) : $relatedTable;
 
-            $relationsAccumulated[] = $relatedTableAlias;
+            $relationsAccumulated[] = $relatedTable;
             $relationAccumulatedString = implode('_', $relationsAccumulated);
+
+            $relatedTableAlias = $this->useFullPathTableAlias ? $relationAccumulatedString : $relatedTable;
+            $relatedTableAlias = $this->useTableAlias ? sha1($relatedTableAlias) : $relatedTableAlias;
 
             //relations count
             if ($this->appendRelationsCount) {
@@ -213,7 +235,7 @@ class EloquentJoinBuilder extends Builder
             }
 
             if (!in_array($relationAccumulatedString, $this->joinedTables)) {
-                $joinQuery = $relatedTable.($this->useTableAlias ? ' as '.$relatedTableAlias : '');
+                $joinQuery = $relatedTable.($this->useTableAlias || $this->useFullPathTableAlias ? ' as '.$relatedTableAlias : '');
                 if ($relatedRelation instanceof BelongsToJoin) {
                     $relatedKey = is_callable([$relatedRelation, 'getQualifiedForeignKeyName']) ? $relatedRelation->getQualifiedForeignKeyName() : $relatedRelation->getQualifiedForeignKey();
                     $relatedKey = last(explode('.', $relatedKey));
@@ -324,6 +346,8 @@ class EloquentJoinBuilder extends Builder
             } elseif ('onlyTrashed' == $method) {
                 call_user_func_array([$join, 'where'], [$relatedTableAlias.'.deleted_at', '<>', null]);
             }
+        } elseif ((in_array($method, ['orderByRaw']))) {
+            call_user_func_array([$join, $method], $params);
         } else {
             throw new InvalidRelationClause();
         }
@@ -349,6 +373,29 @@ class EloquentJoinBuilder extends Builder
         }
     }
 
+    public function performColumnsBinding($sql)
+    {
+        preg_match_all('/'.self::RAW_SQL_RELATION_PREFIX.':(([0-9a-zA-Z$_]\.?)+)/', $sql, $matches);
+
+        $columns = $matches[1];
+
+        $columnsBindings = [];
+        foreach ($columns as $column) {
+            $columnsBindings[$column] = $this->performJoin($column);
+        }
+
+        return $this->replaceColumnsKey($sql, $columnsBindings);
+    }
+
+    private function replaceColumnsKey($sql, $columnsBindings)
+    {
+        foreach ($columnsBindings as $columnName => $column) {
+            $sql = str_replace(self::RAW_SQL_RELATION_PREFIX.':'.$columnName, $column, $sql);
+        }
+
+        return $sql;
+    }
+
     //getters and setters
     public function isUseTableAlias(): bool
     {
@@ -358,6 +405,13 @@ class EloquentJoinBuilder extends Builder
     public function setUseTableAlias(bool $useTableAlias)
     {
         $this->useTableAlias = $useTableAlias;
+
+        return $this;
+    }
+
+    public function setUseFullPathTableAlias(bool $useFullPathTableAlias)
+    {
+        $this->useFullPathTableAlias = $useFullPathTableAlias;
 
         return $this;
     }
