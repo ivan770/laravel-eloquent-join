@@ -155,7 +155,7 @@ class EloquentJoinBuilder extends Builder
             $grammar = \DB::query()->getGrammar();
             $query->selectRaw($aggregateMethod.'('.$grammar->wrap($column).') as '.$sortAlias);
 
-            return $this->orderByRaw($sortAlias.' '.$direction);
+            return $this->orderByRaw($sortAlias.' '.$direction.' NULLS LAST');
         }
 
         //order by base table field
