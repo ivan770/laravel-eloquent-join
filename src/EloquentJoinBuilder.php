@@ -136,7 +136,7 @@ class EloquentJoinBuilder extends Builder
         return $this->orWhereRaw($sql, $bindings, $boolean);
     }
 
-    public function orderByJoin($column, $direction = 'asc', $aggregateMethod = null)
+    public function orderByJoin($column, $direction = 'asc', $aggregateMethod = null, $wrapper = null)
     {
         $direction = strtolower($direction);
         $this->checkDirection($direction);
@@ -144,6 +144,11 @@ class EloquentJoinBuilder extends Builder
 
         $query = $this->baseBuilder ? $this->baseBuilder : $this;
         $column = $query->performJoin($column);
+        
+        if ($wrapper) {
+            $column = $wrapper($column);
+        }
+        
         if (false !== $dotPos) {
             //order by related table field
             $aggregateMethod = $aggregateMethod ? $aggregateMethod : $this->aggregateMethod;
@@ -153,7 +158,12 @@ class EloquentJoinBuilder extends Builder
             $sortAlias = 'sort'.(0 == $sortsCount ? '' : ($sortsCount + 1));
 
             $grammar = \DB::query()->getGrammar();
-            $query->selectRaw($aggregateMethod.'('.$grammar->wrap($column).') as '.$sortAlias);
+            
+            if ($wrapper) {
+                $query->selectRaw($aggregateMethod.'('.$column.') as '.$sortAlias);
+            } else {
+                $query->selectRaw($aggregateMethod.'('.$grammar->wrap($column).') as '.$sortAlias);
+            }
 
             return $this->orderByRaw($sortAlias.' '.$direction.' NULLS LAST');
         }
