@@ -226,6 +226,11 @@ class EloquentJoinBuilder extends Builder
             $relatedModel = $relatedRelation->getRelated();
             $relatedPrimaryKey = $relatedModel->getKeyName();
             $relatedTable = $relatedModel->getTable();
+            
+            $baseQuery = $relatedRelation->toBase();
+            if(count($baseQuery->wheres) !== 0) {
+                $this->mergeWheres(array_slice($baseQuery->wheres, 1), $baseQuery->bindings['where']);
+            }
 
             $relationsAccumulated[] = $relatedTable;
             $relationAccumulatedString = implode('_', $relationsAccumulated);
